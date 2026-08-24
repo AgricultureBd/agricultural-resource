@@ -198,7 +198,13 @@ async function loadResources() {
             ${item.examType ? " · " + esc(item.examType) : ""} · ${esc(item.facultyName) || ""}
           </div>
           <div style="font-size:.78rem;color:var(--moss-600);margin-top:.2rem;">By: ${esc(item.uploaderName) || "—"} (${esc(item.uploaderEmail) || "no email"})${item.uploaderStudentId ? ` · Student ID: <strong>${esc(item.uploaderStudentId)}</strong>` : ""}</div>
-          <div style="margin-top:.4rem;">${(item.fileUrls || []).map(f => `<a href="${esc(f.url)}" target="_blank" rel="noopener" style="font-size:.78rem;color:var(--leaf-500);">${esc(f.name)}</a>`).join(" · ")}</div>
+          <div style="margin-top:.4rem;display:flex;flex-wrap:wrap;gap:.3rem;align-items:center;">
+            ${(item.fileUrls || []).map((f, i) => `
+              <span style="display:inline-flex;align-items:center;gap:.25rem;">
+                <a href="${esc(f.url)}" target="_blank" rel="noopener" style="font-size:.78rem;color:var(--leaf-500);">${esc(f.name)}</a>
+                <button type="button" class="delete-file-btn" data-id="${esc(d.id)}" data-index="${i}" title="Delete this file" style="background:none;border:none;color:var(--terracotta-500);cursor:pointer;font-size:.85rem;line-height:1;padding:0 .15rem;">✕</button>
+              </span>`).join("")}
+          </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:.4rem;align-items:flex-end;">
           <select data-id="${esc(d.id)}" class="status-select">
@@ -206,7 +212,10 @@ async function loadResources() {
             <option value="approved" ${item.status === "approved" ? "selected" : ""}>✅ Approved</option>
             <option value="rejected" ${item.status === "rejected" ? "selected" : ""}>❌ Rejected</option>
           </select>
-          <button type="button" class="edit-btn" data-schema="resources" data-id="${esc(d.id)}" style="background:none;border:1px solid var(--line);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">✏️ Edit</button>
+          <div style="display:flex;gap:.4rem;">
+            <button type="button" class="edit-btn" data-schema="resources" data-id="${esc(d.id)}" style="background:none;border:1px solid var(--line);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">✏️ Edit</button>
+            <button type="button" class="delete-resource-btn" data-id="${esc(d.id)}" style="background:none;border:1px solid var(--terracotta-500);color:var(--terracotta-500);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">🗑 Delete</button>
+          </div>
         </div>`;
       list.appendChild(row);
     });
@@ -215,6 +224,58 @@ async function loadResources() {
       btn.addEventListener("click", () => {
         const item = resourcesCache[btn.dataset.id];
         if (item) openEditModal("resources", btn.dataset.id, item);
+      });
+    });
+
+    // Admin can delete an entire resource entry (and every file attached
+    // to it) at any time, regardless of its pending/approved/rejected
+    // status — there is no status gate on this action.
+    list.querySelectorAll(".delete-resource-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("Delete this resource and all its files? This cannot be undone.")) return;
+        btn.disabled = true;
+        try {
+          await deleteDoc(doc(db, "resources", btn.dataset.id));
+          delete resourcesCache[btn.dataset.id];
+          loadResources();
+        } catch (err) {
+          console.error("[AgriAdmin] resource delete failed:", err);
+          alert("Something went wrong deleting this resource. Please try again.");
+          btn.disabled = false;
+        }
+      });
+    });
+
+    // Admin can delete a single file out of a multi-file resource entry
+    // at any time, without touching the rest of the entry's files.
+    list.querySelectorAll(".delete-file-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.id;
+        const index = Number(btn.dataset.index);
+        const item = resourcesCache[id];
+        if (!item) return;
+        const fileUrls = item.fileUrls || [];
+        const file = fileUrls[index];
+        if (!file) return;
+        if (!confirm(`Delete "${file.name}" from this resource?`)) return;
+        btn.disabled = true;
+        try {
+          const updatedFileUrls = fileUrls.filter((_, i) => i !== index);
+          if (updatedFileUrls.length === 0) {
+            // No files left — remove the whole entry instead of leaving
+            // an empty resource behind.
+            await deleteDoc(doc(db, "resources", id));
+            delete resourcesCache[id];
+          } else {
+            await updateDoc(doc(db, "resources", id), { fileUrls: updatedFileUrls, editedAt: new Date() });
+            item.fileUrls = updatedFileUrls;
+          }
+          loadResources();
+        } catch (err) {
+          console.error("[AgriAdmin] file delete failed:", err);
+          alert("Something went wrong deleting this file. Please try again.");
+          btn.disabled = false;
+        }
       });
     });
 
@@ -285,7 +346,10 @@ async function loadTerms() {
             <option value="approved" ${item.status === "approved" ? "selected" : ""}>✅ Approved</option>
             <option value="rejected" ${item.status === "rejected" ? "selected" : ""}>❌ Rejected</option>
           </select>
-          <button type="button" class="edit-btn" data-schema="terms" data-id="${esc(d.id)}" style="background:none;border:1px solid var(--line);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">✏️ Edit</button>
+          <div style="display:flex;gap:.4rem;">
+            <button type="button" class="edit-btn" data-schema="terms" data-id="${esc(d.id)}" style="background:none;border:1px solid var(--line);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">✏️ Edit</button>
+            <button type="button" class="delete-term-btn" data-id="${esc(d.id)}" style="background:none;border:1px solid var(--terracotta-500);color:var(--terracotta-500);padding:.35rem .7rem;border-radius:6px;cursor:pointer;font-size:.78rem;">🗑 Delete</button>
+          </div>
         </div>`;
       termList.appendChild(row);
     });
@@ -294,6 +358,24 @@ async function loadTerms() {
       btn.addEventListener("click", () => {
         const item = termsCache[btn.dataset.id];
         if (item) openEditModal("terms", btn.dataset.id, item);
+      });
+    });
+
+    // Admin can delete any term (and its image) at any time, regardless
+    // of pending/approved/rejected status.
+    termList.querySelectorAll(".delete-term-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("Delete this term entry? This cannot be undone.")) return;
+        btn.disabled = true;
+        try {
+          await deleteDoc(doc(db, "terms", btn.dataset.id));
+          delete termsCache[btn.dataset.id];
+          loadTerms();
+        } catch (err) {
+          console.error("[AgriAdmin] term delete failed:", err);
+          alert("Something went wrong deleting this term. Please try again.");
+          btn.disabled = false;
+        }
       });
     });
 
@@ -590,13 +672,18 @@ const EDIT_SCHEMAS = {
     title: "Edit Resource",
     reload: loadResources,
     cache: resourcesCache,
+    // Every field here mirrors a field the upload forms in js/resources.js
+    // actually write to the doc, so admin can correct anything a student
+    // submitted — not just a fixed subset.
     fields: [
       { key: "courseCode", label: "Course Code", type: "text" },
       { key: "courseName", label: "Course Name", type: "text" },
       { key: "facultyName", label: "Faculty Name", type: "text" },
       { key: "examType", label: "Exam Type", type: "text" },
-      { key: "uploaderName", label: "Uploader Name", type: "text" },
-      { key: "uploaderEmail", label: "Uploader Email", type: "text" }
+      { key: "fileType", label: "File Type", type: "select", options: { pdf: "PDF", image: "Image", ppt: "PPT" } },
+      { key: "noteType", label: "Note Type", type: "select", options: { hand_notes: "Hand Notes", class_slide: "Class Slide", others: "Others" } },
+      { key: "uploaderEmail", label: "Uploader Email", type: "text" },
+      { key: "uploaderStudentId", label: "Uploader Student ID", type: "text" }
     ]
   },
   terms: {
@@ -607,7 +694,8 @@ const EDIT_SCHEMAS = {
     fields: [
       { key: "name", label: "Term Name", type: "text" },
       { key: "description", label: "Description", type: "textarea" },
-      { key: "imageUrl", label: "Image URL", type: "text" }
+      { key: "imageUrl", label: "Image URL", type: "text" },
+      { key: "uploaderEmail", label: "Uploader Email", type: "text" }
     ]
   },
   timeline: {
@@ -707,7 +795,7 @@ editModalForm.addEventListener("submit", async (e) => {
       updateData[f.key] = input.value ? Timestamp.fromDate(new Date(input.value + "T00:00:00")) : null;
     } else if (f.key === "email" || f.key === "uploaderEmail") {
       updateData[f.key] = normalizeEmail(input.value);
-    } else if (f.key === "studentIdNumber") {
+    } else if (f.key === "studentIdNumber" || f.key === "uploaderStudentId") {
       updateData[f.key] = normalizeStudentId(input.value);
     } else {
       updateData[f.key] = input.value.trim();
