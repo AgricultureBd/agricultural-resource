@@ -27,15 +27,6 @@ function toDate(val) {
   return null;
 }
 
-/** Formats a Date as DD/MM/YYYY (e.g. 23/09/2026), independent of browser/locale settings. */
-function formatDate(date) {
-  if (!(date instanceof Date) || isNaN(date.getTime())) return "";
-  const day = String(date.getDate()).padStart(2, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const year = date.getFullYear();
-  return `${day}/${month}/${year}`;
-}
-
 /**
  * Computes the current access window from a student's resource/term items.
  * @param {Array<{status:string, reviewedAt?:any, submittedAt?:any}>} items
@@ -78,7 +69,7 @@ export async function maybeSendAccessReminder(access, { email, name }) {
   } catch { /* localStorage unavailable — skip throttle, still try to send once */ }
 
   const detail = access.active
-    ? `Your resource access expires in ${access.daysRemaining} day${access.daysRemaining === 1 ? "" : "s"} (on ${formatDate(access.expiresAt)}). Upload a new file and get it approved to renew your access.`
+    ? `Your resource access expires in ${access.daysRemaining} day${access.daysRemaining === 1 ? "" : "s"} (on ${access.expiresAt.toLocaleDateString()}). Upload a new file and get it approved to renew your access.`
     : `Your resource access has expired. Upload a new file and get it approved to renew your access.`;
 
   try {
@@ -110,7 +101,7 @@ export function renderAccessBadge({ badgeEl, detailEl }, access) {
     const isLoyalty = access.tierDays === LOYALTY_TIER_DAYS;
     badgeEl.textContent = isLoyalty ? "🌟 30-Day Access Active" : "🔓 3-Day Access Active";
     badgeEl.className = "access-badge active";
-    detailEl.textContent = `${access.daysRemaining} day${access.daysRemaining === 1 ? "" : "s"} remaining · expires ${formatDate(access.expiresAt)}`
+    detailEl.textContent = `${access.daysRemaining} day${access.daysRemaining === 1 ? "" : "s"} remaining · expires ${access.expiresAt.toLocaleDateString()}`
       + (isLoyalty ? " · Top Contributor (10+ approved files)" : "");
   } else {
     badgeEl.textContent = "🔒 Access Expired";
